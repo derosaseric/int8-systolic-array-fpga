@@ -2,6 +2,7 @@ import random
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import FallingEdge
+CLOCK_PERIOD_NS = 10
 
 def to_signed(val, bits=32):
     return val - (1 << bits) if val >= (1 << (bits - 1)) else val
@@ -17,7 +18,7 @@ async def reset(dut):
 
 @cocotb.test()
 async def mac_random(dut):
-    cocotb.start_soon(Clock(dut.clk, 10, "ns").start())
+    cocotb.start_soon(Clock(dut.clk, CLOCK_PERIOD_NS, "ns").start())
     await reset(dut)
 
     expected = 0
@@ -34,7 +35,7 @@ async def mac_random(dut):
 
 @cocotb.test()
 async def mac_enable_hold(dut):
-    cocotb.start_soon(Clock(dut.clk, 10, "ns").start())
+    cocotb.start_soon(Clock(dut.clk, CLOCK_PERIOD_NS, "ns").start())
     await reset(dut)
 
     # accumulate once: 3 * 4 = 12
@@ -51,3 +52,23 @@ async def mac_enable_hold(dut):
     for _ in range(5):
         await FallingEdge(dut.clk)
         assert to_signed(int(dut.acc.value)) == 12
+
+@cocotb.test()
+async def mac_reset_mid_run(dut):
+    """Question: does rst clear acc even in the middle of accumulating?"""
+    cocotb.start_soon(Clock(dut.clk, CLOCK_PERIOD_NS, "ns").start())
+    await reset(dut)
+
+    N = 10
+
+    for _ in range(N):
+        dut.a.value = 5
+        dut.b.value = 7
+        dut.en.value = 1
+        await FallingEdge(dut.clk)
+
+    assert to_signed(int(dut.acc.value)) == 5 * 7 * N    # precondition: acc is 350
+
+    dut.rst.value = 1    # en is still 1 here: reset must win
+    await FallingEdge(dut.clk)
+    assert to_signed(int(dut.acc.value)) == 0
