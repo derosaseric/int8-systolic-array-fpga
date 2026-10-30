@@ -54,6 +54,25 @@ async def mac_enable_hold(dut):
         assert to_signed(int(dut.acc.value)) == 12
 
 @cocotb.test()
+async def mac_extreme_values(dut):
+    """Question: do the extreme input values give correct products?"""
+    cocotb.start_soon(Clock(dut.clk, CLOCK_PERIOD_NS, "ns").start())
+
+    pairs = [(-128, -128), (-128, 127), (127, -128), (127, 127)]
+
+    for a, b in pairs:
+        await reset(dut)
+
+        expected_value = a * b
+        dut.en.value = 1
+        dut.a.value = a
+        dut.b.value = b
+        await FallingEdge(dut.clk)
+        got = to_signed(int(dut.acc.value))
+
+        assert got == expected_value, f"a={a} b={b} expected_value={expected_value} got={got}"
+
+@cocotb.test()
 async def mac_reset_mid_run(dut):
     """Question: does rst clear acc even in the middle of accumulating?"""
     cocotb.start_soon(Clock(dut.clk, CLOCK_PERIOD_NS, "ns").start())
